@@ -1,5 +1,5 @@
 # Goal
-A wifi-enabled mini-server with touchscreen-only setup to serve as a place to store content securely. Think of it like a digital journal. Full-disk encryption, autoupdates using most secure OS possible, strong-password protected.
+A wifi-enabled mini-server with touchscreen-only setup to serve as a place to store and edit content securely. Think of it like a digital journal. Full-disk encryption, autoupdates using most secure OS possible, strong-password protected.
 
 # Materials (with rough cost as of 1/2021):
 - Raspberry Pi 3 $38.33
