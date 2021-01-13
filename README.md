@@ -15,7 +15,7 @@ A wifi-enabled mini-server with touchscreen-only setup to serve as a place to st
 1. On boot partition, create empty file named 'ssh' to enable ssh.
 1. On root partition run the following:
     ```
-    rm -r LCD-show/`
+    rm -r LCD-show/
     git clone https://github.com/goodtft/LCD-show
     chmod -R 755 LCD-show/
     ```
