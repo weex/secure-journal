@@ -36,7 +36,3 @@ A wifi-enabled mini-server with touchscreen-only setup to serve as a place to st
     sudo ./LCD35-show
     ```
 1. Reboot to complete setup
-
-# Roadmap
-- Create initial setup through touchscreen to setup wifi and choose strong password
-- Add web-based app for taking notes with text formatting, image upload, versioned auto-save.
