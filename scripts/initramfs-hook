@@ -1,0 +1,48 @@
+#!/bin/sh
+# Pull the Pi display drivers and a correct XKB tree into the initramfs so
+# unl0kr can draw on the touchscreen and a USB keyboard still has a layout.
+#
+# unl0kr 2.0.3+dfsg-2 (Debian Trixie) ships its own hook. On arm64 that hook
+# copies phone touch modules (goodix, edt-ft5x06) and then copies
+# /usr/share/X11/xkb onto a destination directory that does not exist yet, so
+# the files land in /usr/share/X11/ instead of /usr/share/X11/xkb/. libxkbcommon
+# looks at the second path. This hook creates that path. It also adds the
+# modules the phone hook does not know: the Touch Display 2 panel (ILI9881 +
+# Goodix GT911, from the vc4-kms-dsi-ili9881 overlay) and a 3.5" SPI panel
+# (ili9486 + ads7846). A module this kernel was built without is skipped, so
+# an unknown name cannot fail the initramfs build.
+
+set -e
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+
+case "${1:-}" in
+  prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+# shellcheck disable=SC1091
+. /usr/share/initramfs-tools/hook-functions
+
+for mod in \
+  vc4 v3d drm drm_kms_helper \
+  panel-ilitek-ili9881c goodix edt-ft5x06 \
+  i2c-brcmstb i2c-bcm2835 rpi-panel-v2-regulator \
+  spi-bcm2835 ili9486 fb_ili9486 ads7846 evdev
+do
+  if modinfo "$mod" >/dev/null 2>&1; then
+    manual_add_modules "$mod" || true
+  fi
+done
+
+if [ -x /usr/local/lib/secure-journal/unlock-keyscript ]; then
+  copy_exec /usr/local/lib/secure-journal/unlock-keyscript
+fi
+
+if [ -d /usr/share/X11/xkb ]; then
+  mkdir -p "${DESTDIR}/usr/share/X11"
+  cp -a /usr/share/X11/xkb "${DESTDIR}/usr/share/X11/"
+fi
