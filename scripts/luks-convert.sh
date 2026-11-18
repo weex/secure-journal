@@ -15,11 +15,14 @@
 # the property a journal wants. OTP programming is permanent and is out of
 # scope here.
 #
-# The initramfs prompt is a text console. A USB keyboard and an HDMI display
-# (or the serial console) are the reliable way to type the passphrase. A 3.5"
-# SPI panel often stays dark until the desktop starts. The official DSI
-# touchscreen may come up earlier; treat that as something to confirm on the
-# hardware. There is no on-screen keyboard at this prompt.
+# The boot prompt is scripts/unlock-keyscript. It waits for a framebuffer and
+# runs Debian's unl0kr (an on-screen keyboard in the initramfs). The Pi boot
+# ROM still cannot do this; the kernel has to be running. A 3.5" SPI panel
+# often stays dark until the desktop, and the official DSI panel only lights
+# once its kernel driver is loaded. If the panel stays dark, add
+# sj.unlock=console to cmdline.txt on the FAT boot partition and type the
+# passphrase with a USB keyboard on HDMI. That file is editable without the
+# passphrase.
 #
 # Usage:
 #   sudo ./scripts/luks-prepare.sh
@@ -74,8 +77,8 @@ partition and not the disk this system booted from. The script erases it
 and writes a LUKS2 root plus a small unencrypted FAT boot partition.
 
 You will be asked to type ERASE /dev/DISK and then a passphrase of at least
-14 characters. Boot the new card from HDMI with a keyboard, enter that
-passphrase, and only then wipe the original card.
+14 characters. Boot the new card, enter that passphrase on the touchscreen
+or with a USB keyboard, and only then wipe the original card.
 EOF
 }
 
@@ -488,9 +491,15 @@ if [ ! -f "$ROOTMNT/etc/fstab" ]; then
   die "copied system has no /etc/fstab"
 fi
 rewrite_fstab "$ROOTMNT/etc/fstab" "$BOOT_PARTUUID"
-printf 'cryptroot PARTUUID=%s none luks,initramfs\n' "$ROOT_PARTUUID" > "$ROOTMNT/etc/crypttab"
+# keyscript is our wrapper, not unl0kr's own script: a missing display then
+# falls back to the console instead of failing the unlock.
+printf 'cryptroot PARTUUID=%s none luks,initramfs,keyscript=/usr/local/lib/secure-journal/unlock-keyscript\n' \
+  "$ROOT_PARTUUID" > "$ROOTMNT/etc/crypttab"
 chmod 644 "$ROOTMNT/etc/crypttab"
 ensure_crypt_initramfs_config "$ROOTMNT"
+
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+"$script_dir/luks-unlock-ui.sh" --root "$ROOTMNT"
 
 if [ "${SECURE_JOURNAL_SKIP_INITRAMFS:-}" = 1 ]; then
   info "Skipping initramfs rebuild (SECURE_JOURNAL_SKIP_INITRAMFS=1)."
@@ -515,6 +524,7 @@ info "Finished."
 info "  Boot partition: $BOOT_PART (PARTUUID=$BOOT_PARTUUID)"
 info "  LUKS partition: $ROOT_PART (PARTUUID=$ROOT_PARTUUID)"
 info "  Unlocked mapper name at boot: /dev/mapper/cryptroot"
-info "Power off, boot this card from HDMI with a keyboard, and enter the disk passphrase."
+info "Power off and boot this card. The touchscreen asks for the disk passphrase when a display device is up; otherwise use HDMI and a USB keyboard."
+info "If the panel stays dark, add sj.unlock=console to cmdline.txt on the boot partition and use the USB keyboard."
 info "The original card is still unencrypted. Keep it as the backup until the new card has booted and the journal is there, then wipe it."
 info "Shut the Pi down to lock the disk again. A locked screen does not lock the disk."

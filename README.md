@@ -92,6 +92,48 @@ nmcli dev wifi list
 sudo nmcli dev wifi connect "SSID" --ask
 ```
 
+SSH is optional. The next section is the touchscreen path: the same card, no second computer after this one is ejected.
+
+## Touchscreen setup
+
+Writing the card still needs another computer. The boot ROM only starts from a card that already has firmware, so it cannot download this setup by itself. After the card is written, the first boot can be done from the touchscreen.
+
+1. In Imager 2, write the desktop image. Set a username and a temporary password, or leave customisation empty so the official first-boot wizard creates the account on the screen. Wi-Fi and SSH can be left unset.
+2. While the boot partition is still mounted (the volume that contains `config.txt` and `user-data`):
+
+```bash
+git clone https://github.com/weex/secure-journal.git
+cd secure-journal
+./scripts/prepare-card.sh /path/to/boot/partition
+```
+
+`prepare-card.sh` copies this repository onto that FAT partition and adds one `runcmd` to `user-data`. It does not change the user, the password, or the Wi-Fi block Imager wrote. Cloud-init only reads the file when the first line is `#cloud-config`, which is what Imager 2 and the current Trixie images write. The format is described in [Cloud-init on Raspberry Pi OS](https://www.raspberrypi.com/news/cloud-init-on-raspberry-pi-os/). If the file is not in that form, the script stops and leaves it unchanged.
+
+3. Put the card in the Pi, connect the touchscreen, and power on. Log in. The wizard opens in the desktop session, which is where the on-screen keyboard can follow a text field.
+
+The wizard is GTK 3. That is the toolkit on the Raspberry Pi OS desktop, and squeekboard is wired to its text fields. A browser would be a second stack, and it is slow on a Pi 3. The window is one column inside a scrolled view, so a 3.5" panel can still reach the buttons when the keyboard is open.
+
+On the screen:
+
+* Set the Wi-Fi country (the radio stays off until a country is set) and join a network, or skip this when Ethernet is already connected. The Wi-Fi password is handed to NetworkManager with `nmcli connection up ... passwd-file`. `nmcli device wifi connect` only accepts the password as an argument, so the wizard does not use that form.
+* Choose a login password and a disk passphrase. Each needs 14 characters and three of lowercase, uppercase, digit, and symbol. A short common-password list is rejected. The two secrets have to be different. The meter runs on the Pi. The passphrase is not sent anywhere.
+* Pick a spare disk. The wizard runs `harden.sh`, then `luks-convert.sh`. Encrypting the card the Pi booted from is not implemented. That would rewrite the disk the system is running from, and a failed conversion would leave nothing that boots. The FAT boot partition stays unencrypted either way: the boot ROM cannot unlock LUKS.
+* Continuing without a spare disk is a separate button, and the journal then says the disk is not encrypted. There is no silent skip.
+
+The spare disk is the encrypted copy. Power off, move that card into the Pi, and power on. The original card is still the backup until the new one has unlocked and the journal is there.
+
+The passphrase prompt at that boot is not the desktop. Debian Trixie ships `unl0kr` 2.0.3+dfsg-2, a small touch keyboard that draws on the framebuffer from the initramfs. `scripts/unlock-keyscript` runs it and, if there is no display device or it fails, asks on the text console instead. The Pi firmware does not drive the Touch Display 2 (Raspberry Pi's display documentation and the firmware authors are explicit that the panel comes up with the kernel driver). The keyscript loads `panel-ilitek-ili9881c` and `goodix` when the kernel has them, which is the Touch Display 2 overlay (`vc4-kms-dsi-ili9881`, Goodix GT911), or `ili9486` and `ads7846` for a 3.5" SPI panel, then waits up to 20 seconds for `/dev/dri/card0` or `/dev/fb0`. Raspberry Pi documents the initramfs as an advanced mechanism and does not ship this integration. It has to be confirmed on the hardware.
+
+If the passphrase screen never appears, power off and add one token to the end of `cmdline.txt` on the FAT boot partition. That file is readable without the passphrase:
+
+```
+sj.unlock=console
+```
+
+Boot with HDMI and a USB keyboard. A 3.5" SPI panel often stays dark until the desktop even when the modules are in the initramfs. Use the HDMI fallback for the first encrypted boot on that panel.
+
+The official Touch Display 2 does not need an overlay. The SPI button in the wizard runs `scripts/spi-display.sh` and reboots. It is the same block as the manual step in the display section.
+
 ## 2. Harden the system
 
 On the Pi:
@@ -161,7 +203,7 @@ sudo reboot
 
 Running `LCD-show` on this image is the step that breaks the desktop. The script does not clone that repository.
 
-The passphrase prompt at boot is not this desktop. Have an HDMI cable and a USB keyboard for the first encrypted boot. An SPI panel often stays dark until the desktop starts.
+The passphrase prompt at boot is the initramfs keyboard described in the touchscreen section, not this desktop. An SPI panel often stays dark until the desktop starts. Have an HDMI cable and a USB keyboard for that first encrypted boot, or add `sj.unlock=console` to `cmdline.txt`.
 
 ## 4. Encrypt the root filesystem
 
@@ -183,7 +225,7 @@ What the script pins, and why:
 * The initramfs is built with `MODULES=most` and `CRYPTSETUP=y`. The stock `MODULES=dep` image only copies modules the running system is using, and `dm-crypt` is not one of them until the disk is already encrypted.
 * The boot partition is FAT, 512MB, with the boot flag set. `cmdline.txt` sets `root=/dev/mapper/cryptroot`. `auto_initramfs=1` (the Trixie default) makes the bootloader load the initramfs. Raspberry Pi documents initramfs as an advanced mechanism and does not ship an encryption tutorial; this uses Debian's `cryptsetup-initramfs`, which Raspberry Pi OS includes.
 
-Power off. Move the new card into the Pi's slot (or leave a USB disk attached and set the boot order if you intend to boot from it). Connect HDMI and a USB keyboard. Power on, type the disk passphrase at the text prompt, then the login password at the desktop.
+Power off. Move the new card into the Pi's slot (or leave a USB disk attached and set the boot order if you intend to boot from it). Power on. Enter the disk passphrase on the touchscreen keyboard, or with a USB keyboard if you set `sj.unlock=console` or the panel stayed dark. Then enter the login password at the desktop.
 
 Confirm the journal file is there. The original card is still unencrypted. It is the backup until that check passes. Then wipe it (`wipefs -a` on each partition, or Imager's erase) before it lives in a drawer next to the Pi.
 
@@ -204,38 +246,54 @@ On the desktop, **Journal** opens today's file. From a terminal, `journal` does 
 
 * Step away: lock the screen from the desktop menu (Shutdown, then Lock Screen). Blanking after 10 minutes hides the picture and does not ask for the password.
 * Finished for the day: shut down. That is what locks the disk.
-* The on-screen keyboard is for the desktop and the greeter. It is not available at the disk-unlock prompt.
+* The on-screen keyboard at the disk prompt is `unl0kr`, inside the initramfs. The desktop keyboard is squeekboard, including the greeter. They are different programs. If the disk prompt does not appear on the panel, use `sj.unlock=console` and a USB keyboard.
 
 ## Scripts
 
 | Script | Runs | What it does |
 | --- | --- | --- |
+| `scripts/prepare-card.sh` | On the computer that wrote the card | Copies this repository to the FAT boot partition and adds a cloud-init runcmd |
+| `scripts/bootstrap.sh` | Root, on the Pi, safe to repeat | Installs the wizard's packages and the desktop autostart |
+| `scripts/launch-session` | Graphical login | Opens the wizard until setup is finished, then the journal |
 | `scripts/harden.sh` | Repeat safely | Updates, firewall, SSH, sudo password, autologin, keyboard, journal directory |
 | `scripts/spi-display.sh` | Repeat safely | One `config.txt` block for a 3.5" SPI panel |
-| `scripts/luks-prepare.sh` | Repeat safely | Installs cryptsetup and rebuilds the initramfs. Does not encrypt |
+| `scripts/luks-prepare.sh` | Repeat safely | Installs cryptsetup and the unlock UI, and rebuilds the initramfs. Does not encrypt |
+| `scripts/luks-unlock-ui.sh` | Repeat safely | Installs the initramfs keyscript and, with `--with-packages`, `unl0kr` |
 | `scripts/luks-convert.sh` | Erases the disk you name | Writes a LUKS root onto a spare disk |
-| `scripts/journal` | | Opens today's entry |
+| `scripts/wifi-join.sh` | | Country, scan, and a NetworkManager connection. The Wi-Fi password is a file |
+| `scripts/setup-apply.sh` | Root, from the wizard | Checks the passphrases, runs harden, then the LUKS copy |
+| `scripts/journal` | | Opens today's entry in the touchscreen app, or Mousepad, or nano |
 
-`tests/spi-display.sh` checks that the config block can be rewritten without losing the rest of `config.txt`. `tests/luks-metadata.sh` checks the cmdline and fstab rewrite and that the LUKS header is the pinned cipher and Argon2 cost. `tests/luks-convert-loop.sh` runs the copy onto loop devices when the kernel has device-mapper. None of these is a substitute for booting a Pi.
+`tests/spi-display.sh` checks that the config block can be rewritten without losing the rest of `config.txt`. `tests/luks-metadata.sh` checks the cmdline and fstab rewrite and that the LUKS header is the pinned cipher and Argon2 cost. `tests/luks-convert-loop.sh` runs the copy onto loop devices when the kernel has device-mapper. `tests/python.sh` checks the passphrase meter, the Wi-Fi and disk parsers, and the journal files. `tests/user-data-merge.sh`, `tests/wifi-join.sh`, `tests/unlock-keyscript.sh`, and `tests/setup-apply.sh` cover the wizard's shell without a radio, a display, or a Pi. None of these is a substitute for booting a Pi.
 
 ## Needs a real Pi
 
-The steps were checked against Raspberry Pi's documentation for installing an image, SSH, `config.txt`, the Touch Display 2, the 2022 removal of the default user, cloud-init on Trixie, and Imager's customisation formats. `shellcheck` is clean on the scripts. In this environment the kernel has no device-mapper, so the tests covered the `config.txt` block, the convert script's refusals, the cmdline and fstab rewrite, and a real LUKS2 header with the pinned cipher and Argon2 cost. They did not boot a Pi. These still need hardware:
+The steps were checked against Raspberry Pi's documentation for installing an image, SSH, `config.txt`, the Touch Display 2, the 2022 removal of the default user, cloud-init on Trixie, Imager's customisation formats, and Debian Trixie's `unl0kr` package. `shellcheck` is clean on the scripts. In this environment the kernel has no device-mapper, so the tests covered the `config.txt` block, the convert script's refusals, the cmdline and fstab rewrite, a real LUKS2 header with the pinned cipher and Argon2 cost, the cloud-init runcmd merge, the passphrase rules, the Wi-Fi and disk parsers, the unlock keyscript's console fallback, and `setup-apply.sh` refusing a weak or mismatched passphrase before it changes anything. They did not boot a Pi, join a network, or open the GTK windows. These still need hardware:
 
 * Imager 2 customisation on a current Trixie image: user, Wi-Fi country, and SSH key, then SSH to `hostname.local`.
-* `harden.sh` on the Pi: `ufw`, `sshd -T`, a second key-based login, sudo prompting, the desktop asking for a password, the on-screen keyboard, and `unattended-upgrade --dry-run`.
-* Touch Display 2: picture, touch, and the on-screen keyboard in a text field, including the greeter after a lock.
-* A 3.5" SPI panel: `scripts/spi-display.sh`, then rotation and touch axes for that exact clone. Confirm whether the disk passphrase prompt appears on that panel.
-* `luks-convert.sh` onto a spare card, then a real boot: passphrase on HDMI, desktop login, journal file present, reboot asks again. Time the unlock on a Pi 3 if that is the board.
-* A kernel update from unattended-upgrades, then a manual reboot, to confirm the new initramfs still unlocks.
+* Touchscreen path: `prepare-card.sh` on the boot partition, first boot, log in with the on-screen keyboard, wizard opens without an SSH session.
+* Wizard Wi-Fi: country code, scan, join, and Ethernet skip. Confirm the password is not required on a second boot.
+* Wizard passphrases: the meter rejects a short password and accepts a long mixed one; the disk passphrase and the login password have to differ.
+* `harden.sh` from the wizard or by hand: `ufw`, `sshd -T`, a second key-based login if SSH is in use, sudo prompting, the desktop asking for a password, the on-screen keyboard, and `unattended-upgrade --dry-run`.
+* Touch Display 2: picture and touch in the wizard, squeekboard in a text field and on the greeter, then the disk passphrase on `unl0kr` after the encrypted card is booted. Time how long the panel stays dark.
+* A 3.5" SPI panel: the wizard's SPI button or `scripts/spi-display.sh`, then rotation and touch axes. Expect the disk prompt to need HDMI. Confirm whether `unl0kr` appears on that panel at all.
+* `sj.unlock=console` on `cmdline.txt`: the on-screen UI is skipped and a USB keyboard on HDMI can unlock.
+* `luks-convert.sh` onto a spare card, from the wizard or the shell: passphrase, desktop login, journal file present, reboot asks again. Time the unlock on a Pi 3 if that is the board. Confirm a wrong passphrase is rejected and the right one still works.
+* Continue without encryption: the journal shows that the disk is not encrypted, and "Set up encryption" opens the wizard again.
+* A kernel update from unattended-upgrades, then a manual reboot, to confirm the new initramfs still runs `unl0kr` and unlocks.
 
 ## Layout
 
 ```
-scripts/harden.sh          first-boot hardening
+scripts/prepare-card.sh    stage the wizard onto a freshly written card
+scripts/bootstrap.sh       install packages and the desktop autostart
+scripts/launch-session     wizard, then the journal
+ui/                        GTK wizard, journal app, and the testable rules
+scripts/harden.sh          firewall, updates, SSH, passwords
 scripts/spi-display.sh     optional 3.5" SPI panel
 scripts/luks-prepare.sh    initramfs support, no encryption yet
+scripts/luks-unlock-ui.sh  unl0kr keyscript and display modules
 scripts/luks-convert.sh    LUKS root on a spare disk
 scripts/journal            open today's entry
-tests/                     config.txt, LUKS header, and loopback checks
+tests/                     parsers, cloud-init merge, LUKS header, loopback
 ```
