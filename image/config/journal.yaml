@@ -1,20 +1,26 @@
-# Raspberry Pi 5 image: Trixie minbase, NetworkManager, cage + Chromium kiosk.
+# Raspberry Pi 5 image: Trixie, NetworkManager, cage + Chromium kiosk.
 # Build with image/build.sh. See the README.
-include:
-  file: trixie-minbase.yaml
+#
+# This does not include trixie-minbase.yaml. That file pulls systemd-net-min,
+# which provides network-activator, and NetworkManager provides it too.
+# rpi-image-gen rejects the image when both are selected. The journal layer
+# requires the same Trixie pieces, with network-manager-iwd in place of
+# systemd-networkd.
 
 device:
+  layer: rpi5
   hostname: journal
   user1: journal
   user1sudo: none
 
 image:
-  name: secure-journal
+  layer: image-rpios
+  boot_part_size: 200%
   root_part_size: 10240M
+  name: secure-journal
 
 layer:
   app: journal
-  nm: network-manager-iwd
 
 deploy:
   compression: none

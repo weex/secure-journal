@@ -86,7 +86,7 @@ npm run build
 
 ## Build the image
 
-The image is an [rpi-image-gen](https://github.com/raspberrypi/rpi-image-gen) v2.9.0 definition, `image/config/journal.yaml`. It includes the Trixie minbase (no desktop), targets a Pi 5, and adds NetworkManager with iwd as the Wi-Fi backend. cage and Chromium run a kiosk on tty1 pointed at the setup page. The Touch Display 2 is picked up by `display_auto_detect=1` and the VC4 KMS driver already in that Pi 5 base.
+The image is an [rpi-image-gen](https://github.com/raspberrypi/rpi-image-gen) v2.9.0 definition, `image/config/journal.yaml`. It uses the Trixie minbase packages (no desktop) with NetworkManager and iwd instead of systemd-networkd, because those two both claim the network and the image tool rejects that. It targets a Pi 5. cage and Chromium run a kiosk on tty1 pointed at the setup page. The Touch Display 2 is picked up by `display_auto_detect=1` and the VC4 KMS driver already in that Pi 5 base.
 
 Upstream supports a Debian Bookworm or Trixie arm64 machine. On one:
 
