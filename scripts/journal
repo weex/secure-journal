@@ -1,0 +1,44 @@
+#!/bin/sh
+# Open today's journal entry, creating it if this is the first time today.
+# The directory is mode 0700. This is a text file on an encrypted root,
+# not a second layer of encryption.
+
+set -eu
+
+umask 077
+
+dir=${JOURNAL_DIR:-$HOME/journal}
+year=$(date +%Y)
+month=$(date +%m)
+day=$(date +%F)
+file="$dir/$year/$month/$day.md"
+
+mkdir -p "$dir/$year/$month"
+chmod 700 "$dir" "$dir/$year" "$dir/$year/$month"
+
+if [ ! -e "$file" ]; then
+  printf '# %s\n\n' "$day" > "$file"
+  chmod 600 "$file"
+fi
+
+# A graphical session should use a touchscreen-friendly editor. Raspberry Pi OS
+# ships Mousepad with the desktop image. EDITOR, then nano, cover SSH.
+if [ -n "${WAYLAND_DISPLAY:-${DISPLAY:-}}" ]; then
+  if command -v mousepad >/dev/null 2>&1; then
+    exec mousepad "$file"
+  fi
+  if command -v gnome-text-editor >/dev/null 2>&1; then
+    exec gnome-text-editor "$file"
+  fi
+fi
+
+if [ -n "${EDITOR:-}" ]; then
+  # EDITOR is a single command name. Arguments belong in a wrapper script.
+  exec "$EDITOR" "$file"
+fi
+
+if command -v nano >/dev/null 2>&1; then
+  exec nano "$file"
+fi
+
+exec vi "$file"
