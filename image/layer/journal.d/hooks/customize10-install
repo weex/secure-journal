@@ -72,6 +72,9 @@ if [[ ${JOURNAL_HOOK_TEST:-} == 1 ]]; then
   exit 0
 fi
 
-install -d -m 0750 -o "${user}" -g "${user}" "${root}/var/lib/secure-journal"
+# install -o looks up the user on the build machine. journal exists only
+# in the image, so the ownership change runs in the chroot.
+install -d -m 0750 "${root}/var/lib/secure-journal"
+chroot "${root}" chown "${user}:${user}" /var/lib/secure-journal
 chroot "${root}" usermod -a -G seat "${user}"
 chroot "${root}" python3 -c 'import fastapi, uvicorn, argon2, cryptography'
