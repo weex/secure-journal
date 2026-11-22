@@ -1,0 +1,211 @@
+:root {
+  color-scheme: light;
+  --ink: #1c1915;
+  --muted: #5e584e;
+  --paper: #f6f1e6;
+  --page: #fffdf8;
+  --line: #e3dacb;
+  --green: #1f4d3a;
+  --green-ink: #f3f7f2;
+  --danger: #8c2f2f;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+}
+
+button, input {
+  font: inherit;
+}
+
+.gate {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.gate form, .empty-note {
+  width: min(28rem, 100%);
+}
+
+h1 {
+  font-size: 2.4rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.4rem;
+}
+
+.lede { color: var(--muted); line-height: 1.45; }
+
+label { display: block; margin: 1rem 0 0.35rem; }
+
+input[type="password"], .search, .title-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--page);
+  color: var(--ink);
+  border-radius: 0.55rem;
+  padding: 0.7rem 0.8rem;
+}
+
+input[type="password"] { font-size: 1.15rem; min-height: 3rem; }
+
+button.primary, button.quiet, button.danger {
+  min-height: 2.6rem;
+  border-radius: 0.55rem;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+}
+
+button.primary {
+  margin-top: 1rem;
+  width: 100%;
+  border: 0;
+  background: var(--green);
+  color: var(--green-ink);
+}
+
+button.quiet, button.danger {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+
+button.danger { color: var(--danger); }
+
+.error { color: var(--danger); min-height: 1.3rem; }
+
+.app { display: none; }
+
+.app.open {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 18rem 1fr;
+}
+
+.sidebar {
+  border-right: 1px solid var(--line);
+  padding: 1rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 0;
+}
+
+.brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.brand strong { font-size: 1.15rem; }
+
+.list {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 0;
+}
+
+.entry-button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.5rem;
+  cursor: pointer;
+}
+
+.entry-button[aria-current="true"] { background: #efe7d8; }
+
+.entry-button small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.sheet {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(90deg, transparent 0, transparent 2.4rem, rgba(176, 74, 74, 0.35) 2.4rem, transparent 2.45rem),
+    var(--page);
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.55rem 1rem 0.55rem 3.2rem;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--page);
+}
+
+.toolbar button {
+  min-width: 2.2rem;
+  min-height: 2.2rem;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+
+.toolbar button[aria-pressed="true"] { background: #efe7d8; }
+
+.spacer { flex: 1; }
+
+.save-state { color: var(--muted); font-size: 0.9rem; }
+
+.title-input {
+  border: 0;
+  border-radius: 0;
+  font-size: 1.8rem;
+  padding: 1.1rem 1rem 0.2rem 3.2rem;
+  background: transparent;
+}
+
+.editor {
+  flex: 1;
+  padding: 0.4rem 1.2rem 3rem 3.2rem;
+  font-size: 1.2rem;
+  line-height: 1.6;
+  outline: none;
+}
+
+.editor p { margin: 0.4rem 0; }
+
+.editor h1, .editor h2, .editor h3 { letter-spacing: -0.02em; }
+
+.ProseMirror { outline: none; min-height: 50vh; }
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #b3aa9c;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.placeholder-page {
+  margin: auto;
+  color: var(--muted);
+  padding: 2rem;
+}
+
+@media (max-width: 800px) {
+  .app.open { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
+}

@@ -1,0 +1,19 @@
+[Unit]
+Description=Secure Journal touchscreen setup
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+User=root
+Environment=PYTHONPATH=/opt/secure-journal
+Environment=JOURNAL_DATA_DIR=/var/lib/secure-journal
+Environment=JOURNAL_SETUP_HOST=127.0.0.1
+Environment=JOURNAL_SETUP_PORT=8080
+Environment=JOURNAL_OWNER=journal
+ExecStart=/usr/bin/python3 -m journal_app.setup_server
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install and test
+        run: |
+          python -m pip install -r web/requirements.txt
+          pytest
+
+  editor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Rebuild the editor bundle
+        working-directory: web/editor
+        run: |
+          npm ci
+          npm run build
+      - name: Bundle matches the committed file
+        run: git diff --exit-code -- web/journal_app/static/editor.js
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check image scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck image/build.sh image/layer/journal.d/hooks/customize10-install image/layer/journal.d/assets/enable-firewall.sh image/layer/journal.d/assets/wait-setup.sh
+          bash -n image/build.sh
+          bash -n image/layer/journal.d/hooks/customize10-install

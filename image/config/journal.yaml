@@ -1,0 +1,20 @@
+# Raspberry Pi 5 image: Trixie minbase, NetworkManager, cage + Chromium kiosk.
+# Build with image/build.sh. See the README.
+include:
+  file: trixie-minbase.yaml
+
+device:
+  hostname: journal
+  user1: journal
+  user1sudo: none
+
+image:
+  name: secure-journal
+  root_part_size: 10240M
+
+layer:
+  app: journal
+  nm: network-manager-iwd
+
+deploy:
+  compression: none

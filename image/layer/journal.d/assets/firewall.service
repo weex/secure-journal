@@ -1,0 +1,11 @@
+[Unit]
+Description=Secure Journal firewall
+After=systemd-sysctl.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/secure-journal/enable-firewall.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

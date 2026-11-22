@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secure Journal</title>
+  <link rel="stylesheet" href="/static/journal.css">
+</head>
+<body>
+  <section id="gate" class="gate">
+    <form id="login">
+      <h1>Secure Journal</h1>
+      <p class="lede">Sign in with the security password from the touchscreen.</p>
+      <label for="login-password">Security password</label>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+      <p id="login-error" class="error" role="alert"></p>
+      <button class="primary" type="submit">Open</button>
+    </form>
+  </section>
+
+  <section id="app" class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <strong>Journal</strong>
+        <button id="logout" class="quiet" type="button">Sign out</button>
+      </div>
+      <input id="search" class="search" type="search" placeholder="Search" autocomplete="off">
+      <button id="create" class="primary" type="button">New entry</button>
+      <div id="list" class="list"></div>
+    </aside>
+    <article class="sheet">
+      <div id="empty" class="placeholder-page">Choose an entry, or start a new one.</div>
+      <div id="writer" hidden>
+        <div class="toolbar" role="toolbar" aria-label="Formatting">
+          <button type="button" data-cmd="bold"><b>B</b></button>
+          <button type="button" data-cmd="italic"><i>I</i></button>
+          <button type="button" data-cmd="heading">H</button>
+          <button type="button" data-cmd="bullet">List</button>
+          <button type="button" data-cmd="ordered">1.</button>
+          <button type="button" data-cmd="quote">Quote</button>
+          <span class="spacer"></span>
+          <span id="save-state" class="save-state"></span>
+          <button id="delete" class="danger" type="button">Delete</button>
+        </div>
+        <input id="title" class="title-input" type="text" maxlength="200" placeholder="Title" autocomplete="off">
+        <div id="editor" class="editor"></div>
+      </div>
+    </article>
+  </section>
+  <script src="/static/editor.js"></script>
+  <script src="/static/journal.js"></script>
+</body>
+</html>

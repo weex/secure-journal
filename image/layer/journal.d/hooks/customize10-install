@@ -1,0 +1,77 @@
+#!/bin/bash
+# Install the journal into the image root. $1 is the rootfs.
+# JOURNAL_HOOK_TEST=1 skips chroot calls so the script can be checked
+# without a Debian tree. image/build.sh stages the app into payload/.
+
+set -euo pipefail
+
+root=${1:?rootfs}
+user=${IGconf_device_user1:-journal}
+host=${IGconf_device_hostname:-journal}
+assets=${LAYER_DOTD:?}/assets
+payload=${JOURNAL_PAYLOAD:-${LAYER_DOTD}/payload}
+
+if [[ ! -f ${payload}/journal_app/__init__.py ]]; then
+  echo "stage the app into ${payload} first (image/build.sh does this)" >&2
+  exit 1
+fi
+
+install -d -m 0755 "${root}/opt/secure-journal"
+rm -rf "${root}/opt/secure-journal/journal_app"
+cp -a "${payload}/journal_app" "${root}/opt/secure-journal/journal_app"
+find "${root}/opt/secure-journal" -type d -name '__pycache__' -exec rm -rf {} + || true
+
+install -d -m 0755 "${root}/usr/lib/secure-journal"
+install -m 0755 "${assets}/enable-firewall.sh" "${root}/usr/lib/secure-journal/enable-firewall.sh"
+install -m 0755 "${assets}/wait-setup.sh" "${root}/usr/lib/secure-journal/wait-setup.sh"
+
+install -d -m 0755 "${root}/etc/systemd/system"
+sed -e "s/@USER@/${user}/g" "${assets}/kiosk.service" \
+  > "${root}/etc/systemd/system/secure-journal-kiosk.service"
+install -m 0644 "${assets}/setup.service" "${root}/etc/systemd/system/secure-journal-setup.service"
+install -m 0644 "${assets}/web.service" "${root}/etc/systemd/system/secure-journal.service"
+install -m 0644 "${assets}/firewall.service" "${root}/etc/systemd/system/secure-journal-firewall.service"
+
+printf '%s\n' "${host}" > "${root}/etc/hostname"
+
+# The Trixie minbase includes OpenSSH. Leave the package, keep the service off.
+ln -sfn /dev/null "${root}/etc/systemd/system/ssh.service"
+ln -sfn /dev/null "${root}/etc/systemd/system/ssh.socket"
+# NetworkManager owns every interface. networkd would configure them too.
+ln -sfn /dev/null "${root}/etc/systemd/system/systemd-networkd.service"
+ln -sfn /dev/null "${root}/etc/systemd/system/systemd-networkd.socket"
+# tty1 belongs to the kiosk. tty2 and the rest stay available.
+ln -sfn /dev/null "${root}/etc/systemd/system/getty@tty1.service"
+
+enable_unit() {
+  local unit=$1
+  local dest="${root}/etc/systemd/system/multi-user.target.wants/${unit}"
+  install -d -m 0755 "$(dirname "${dest}")"
+  if [[ -e ${root}/etc/systemd/system/${unit} ]]; then
+    ln -sfn "/etc/systemd/system/${unit}" "${dest}"
+  elif [[ -e ${root}/usr/lib/systemd/system/${unit} ]]; then
+    ln -sfn "/usr/lib/systemd/system/${unit}" "${dest}"
+  elif [[ -e ${root}/lib/systemd/system/${unit} ]]; then
+    ln -sfn "/lib/systemd/system/${unit}" "${dest}"
+  elif [[ ${JOURNAL_HOOK_TEST:-} == 1 ]]; then
+    ln -sfn "/usr/lib/systemd/system/${unit}" "${dest}"
+  else
+    echo "unit not found: ${unit}" >&2
+    exit 1
+  fi
+}
+
+enable_unit secure-journal-setup.service
+enable_unit secure-journal-kiosk.service
+enable_unit secure-journal-firewall.service
+enable_unit seatd.service
+enable_unit avahi-daemon.service
+
+if [[ ${JOURNAL_HOOK_TEST:-} == 1 ]]; then
+  install -d -m 0750 "${root}/var/lib/secure-journal"
+  exit 0
+fi
+
+install -d -m 0750 -o "${user}" -g "${user}" "${root}/var/lib/secure-journal"
+chroot "${root}" usermod -a -G seat "${user}"
+chroot "${root}" python3 -c 'import fastapi, uvicorn, argon2, cryptography'

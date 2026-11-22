@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secure Journal setup</title>
+  <link rel="stylesheet" href="/static/setup.css">
+</head>
+<body>
+  <main>
+    <p class="lede">Secure Journal</p>
+    <h1 id="title">Set up this Pi</h1>
+    <p id="lede" class="lede">Choose a Wi-Fi country, join a network, then set the password you will use in a browser.</p>
+
+    <section id="wifi-step">
+      <label for="country">Wi-Fi country</label>
+      <select id="country">
+        <option value="">Choose a country</option>
+      </select>
+      <div class="row">
+        <button id="scan" type="button" disabled>Scan for networks</button>
+      </div>
+      <div id="networks" class="networks"></div>
+      <div id="wifi-secret">
+        <label for="wifi-password">Wi-Fi password</label>
+        <input id="wifi-password" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="row">
+        <button id="join" type="button" class="secondary" disabled>Join</button>
+        <button id="use-ethernet" type="button" class="secondary hidden">Use Ethernet</button>
+      </div>
+    </section>
+
+    <section id="password-step" class="hidden">
+      <div class="card">
+        <p id="joined" class="status-line"></p>
+        <label for="password">Security password</label>
+        <input id="password" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+        <label for="confirmation">Type it again</label>
+        <input id="confirmation" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+        <p id="meter" class="note"></p>
+        <div class="row">
+          <button id="finish" type="button">Save password</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="ready" class="hidden">
+      <div class="card">
+        <p class="lede">Open this address on another device on the same network.</p>
+        <p id="url" class="url"></p>
+        <p id="ips" class="address"></p>
+        <p id="cert" class="note"></p>
+      </div>
+    </section>
+    <p id="error" class="error" role="alert"></p>
+  </main>
+
+  <div id="keyboard" class="keyboard" aria-hidden="true"></div>
+  <script src="/static/setup.js"></script>
+</body>
+</html>
