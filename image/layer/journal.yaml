@@ -5,7 +5,16 @@
 # X-Env-Layer-Desc: Secure Journal kiosk, setup service, and LAN web app on
 #  Debian Trixie. NetworkManager (iwd backend) provides Wi-Fi. The touchscreen
 #  session is cage and Chromium, not a desktop.
-# X-Env-Layer-Requires: trixie-minbase,network-manager-iwd,device-user-admin
+# X-Env-Layer-Requires: debian-trixie-arm64-multi,
+#  rpi-debian-trixie,
+#  rpi-misc-utils,
+#  rpi-essential-base,
+#  rpi-misc-skel,
+#  openssh-server,
+#  systemd-timesyncd,
+#  wireless-regulatory,
+#  network-manager-iwd,
+#  device-user-admin
 # METAEND
 ---
 mmdebstrap:

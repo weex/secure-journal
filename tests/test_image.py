@@ -65,8 +65,10 @@ def test_image_config_matches_the_appliance():
     config = (ROOT / "image/config/journal.yaml").read_text()
     layer = (ROOT / "image/layer/journal.yaml").read_text()
     assert "hostname: journal" in config
-    assert "network-manager-iwd" in config
-    assert "trixie-minbase.yaml" in config
+    assert "layer: rpi5" in config
+    assert "file: trixie-minbase.yaml" not in config
+    assert "network-manager-iwd" in layer
+    assert "systemd-net-min" not in layer
     assert "X-Env-Layer-Name: journal" in layer
     assert "cage" in layer
     assert "chromium" in layer
