@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Journal setup
+Comment=First-boot touchscreen setup for the journal
+Exec=/opt/secure-journal/scripts/launch-session
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+NoDisplay=true

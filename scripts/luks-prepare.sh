@@ -15,6 +15,10 @@
 #     that formats the disk. A cost chosen on a Pi 5 can then fail inside the
 #     smaller initramfs, or be unusable on a Pi 3. The convert script pins
 #     the cost; this script only makes sure the initramfs can run cryptsetup.
+#   * unl0kr is installed when the package is available, and the keyscript
+#     that falls back to a USB keyboard is copied into place. The initramfs
+#     rebuild below picks both up. A missing unl0kr package does not abort
+#     preparation; the console prompt still works.
 #
 # Safe to run more than once.
 
@@ -108,6 +112,10 @@ if ! grep -E -q '^[[:space:]]*auto_initramfs=1([[:space:]]|$)' "$config"; then
   printf '\n# secure-journal: load the initramfs so a LUKS root can be unlocked.\nauto_initramfs=1\n' >> "$config"
   info "Set auto_initramfs=1 in $config."
 fi
+
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+info "Installing the touchscreen unlock prompt (unl0kr, with a console fallback)."
+"$script_dir/luks-unlock-ui.sh" --with-packages
 
 info "Rebuilding the initramfs."
 update-initramfs -u -k all

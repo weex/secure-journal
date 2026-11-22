@@ -167,7 +167,7 @@ conf=$inspect/etc/initramfs-tools/initramfs.conf
 
 grep -q '/dev/mapper/cryptroot' "$fstab"
 grep -q "PARTUUID=${boot_id}" "$fstab"
-grep -q "cryptroot PARTUUID=${root_id} none luks,initramfs" "$crypttab"
+grep -q "cryptroot PARTUUID=${root_id} none luks,initramfs,keyscript=/usr/local/lib/secure-journal/unlock-keyscript" "$crypttab"
 grep -q 'original note' "$note"
 if [ "$(stat -c '%a' "$note")" != "600" ]; then
   printf 'FAIL journal note mode is %s\n' "$(stat -c '%a' "$note")" >&2

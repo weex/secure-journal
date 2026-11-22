@@ -21,9 +21,15 @@ if [ ! -e "$file" ]; then
   chmod 600 "$file"
 fi
 
-# A graphical session should use a touchscreen-friendly editor. Raspberry Pi OS
-# ships Mousepad with the desktop image. EDITOR, then nano, cover SSH.
+# The touchscreen app is the one the setup installs. Mousepad, then EDITOR,
+# then nano, cover a session where that app is not installed yet.
 if [ -n "${WAYLAND_DISPLAY:-${DISPLAY:-}}" ]; then
+  ui_root=/opt/secure-journal
+  if [ -f "$ui_root/ui/journal_app.py" ] && python3 -c 'import gi; gi.require_version("Gtk", "3.0"); from gi.repository import Gtk' >/dev/null 2>&1; then
+    PYTHONPATH=$ui_root${PYTHONPATH:+:$PYTHONPATH}
+    export PYTHONPATH
+    exec python3 -m ui.journal_app
+  fi
   if command -v mousepad >/dev/null 2>&1; then
     exec mousepad "$file"
   fi
