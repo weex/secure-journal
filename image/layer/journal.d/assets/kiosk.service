@@ -1,0 +1,22 @@
+[Unit]
+Description=Secure Journal touchscreen
+After=secure-journal-setup.service seatd.service
+Wants=secure-journal-setup.service seatd.service
+Conflicts=getty@tty1.service
+
+[Service]
+User=@USER@
+Group=@USER@
+SupplementaryGroups=seat video render input
+TTYPath=/dev/tty1
+RuntimeDirectory=kiosk
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/kiosk
+ExecStartPre=/usr/lib/secure-journal/wait-setup.sh
+ExecStart=/usr/bin/cage -- /usr/bin/chromium --kiosk --ozone-platform=wayland --noerrdialogs --disable-infobars --no-first-run --disable-translate --disable-features=Translate --overscroll-history-navigation=0 --check-for-update-interval=31536000 --user-data-dir=/run/kiosk/chromium http://127.0.0.1:8080/
+Restart=always
+RestartSec=2
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

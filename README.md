@@ -1,299 +1,105 @@
-# secure-journal
+# Secure Journal
 
-A small Wi-Fi journal: a Raspberry Pi with a touchscreen, an encrypted root filesystem, daily security updates, and an SSH login that uses keys.
+A Raspberry Pi 5 image you write to an SD card. On first boot the official Touch Display 2 asks for Wi-Fi and a security password. After that, the screen shows the address of a journal you open in a browser on the same network.
 
-The current target is [Raspberry Pi OS](https://www.raspberrypi.com/software/operating-systems/) 64-bit, based on Debian 13 (Trixie). The images published on 6 October 2026 use kernel 6.18. The desktop image is the one this setup expects. Lite has no touchscreen session. The "Full" image adds applications a journal does not need.
+## What you need
 
-This is a one-machine setup for a Pi 3, 4, or 5. It is not a managed fleet, and it does not program the Pi's one-time memory.
+- Raspberry Pi 5
+- Official Raspberry Pi Touch Display 2
+- microSD card, 16 GB or larger
+- The usual Pi 5 power supply
+- A USB keyboard is optional. The setup screen has its own keyboard.
 
-## What is protected
+## Flash, boot, write
 
-| Threat | What holds |
-| --- | --- |
-| The microSD card (or SSD) is removed and read on another computer | The root filesystem is LUKS2. The journal is on that filesystem. |
-| The Pi is stolen while it is switched off | The same passphrase is required before Linux starts. |
-| Someone is on the network | The firewall drops inbound connections other than rate-limited SSH. SSH rejects passwords once a key is installed, and rejects root login. |
-| Packages with security fixes | `unattended-upgrades` installs Debian security updates and Raspberry Pi archive updates every day. |
+1. Download `secure-journal.img.xz` from a run of the Image workflow, or build it with the steps below.
+2. Write the image to the card. Raspberry Pi Imager can do this with "Use custom". On Linux:
 
-Two limits are structural:
+   ```bash
+   xzcat secure-journal.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
+   ```
 
-* The FAT boot partition stays readable. The Pi's boot ROM cannot unlock LUKS, so the kernel and initramfs sit in the clear. Someone with the card can replace those files. They still cannot read the journal without the passphrase. Raspberry Pi's [Secure Boot Provisioner](https://github.com/raspberrypi/documentation/blob/master/documentation/asciidoc/security/secure-boot-provisioner/secure-boot-provisioner.adoc) can go further (signed boot, unlock from a device-unique OTP secret, no passphrase). Programming OTP is permanent, and that unlock has no passphrase, so it is a different tool than this one.
-* After the passphrase is entered, the disk stays open until shutdown. Locking or blanking the screen locks the session. Shut the Pi down to lock the disk.
+   Replace `/dev/sdX` with the card. Check the name before you run it.
+3. Connect the Touch Display 2, insert the card, and power on. The first boot installs nothing else; the image already has the software.
+4. On the screen, choose the Wi-Fi country, scan, and join a network. Type the Wi-Fi password with the on-screen keyboard or a USB keyboard. If an Ethernet cable is already connected, "Use Ethernet" skips Wi-Fi.
+5. Set a security password and type it again. It needs 14 characters and three of: lowercase, uppercase, digit, symbol.
+6. The screen then shows `https://journal.local` and the Pi's IP address.
+7. On a computer on the same network, open that address. Sign in with the security password.
 
-The disk passphrase and the login password are different secrets. Write the disk passphrase down and keep it away from the Pi. There is no recovery copy on the card. A lost passphrase is a lost journal.
+The browser will warn that the certificate is not from a known authority. That warning is expected. The Pi created the certificate itself on first setup, and no public authority signed it. Continue past the warning, then sign in. Prefer `https://journal.local`. Opening the raw IP address can add a name-mismatch warning when that address was not the one present at setup.
 
-## Hardware
+The hostname is `journal`. Avahi publishes `journal.local`.
 
-US list prices after the memory adjustments announced on 1 December 2025, 2 February 2026, 1 April 2026, and 1 October 2026. The 16GB Pi 5 at $305 is the figure on the [Pi 5 product page](https://www.raspberrypi.com/products/raspberry-pi-5/). The 4GB and 8GB figures are those increases added up, and they match approved-reseller listings in November 2026. Raspberry Pi has described the increases as temporary. Check the product page before buying.
+## The journal
 
-| Part | Price | Why this one |
-| --- | --- | --- |
-| Raspberry Pi 5, 4GB | $110 | Comfortable Wayland desktop. 2GB ($77.50) is enough for text. 8GB is $175 and 16GB is $305; a journal does not need either. The 1GB Pi 5 is still $45 and is tight for this desktop. |
-| [Touch Display 2](https://www.raspberrypi.com/products/touch-display-2/), 5-inch | $40 | Official DSI panel. Pi 3, 4, and 5 detect the 5-inch and 7-inch models. The 7-inch is $60. The 10-inch is $80 and works with Pi 5 only. |
-| Raspberry Pi 27W USB-C supply | about $13 | The supply Raspberry Pi recommends for a Pi 5. A Pi 4 supply can leave a Pi 5 short. |
-| 64GB A2 microSD card | current card price | The October 2026 desktop image wants about 6.4GB. 64GB leaves room for the journal. |
+The page is a short list of entries by date, and a word processor for the one you have open. You can create, edit, and delete entries. Edits save on their own. The search box looks through titles and text. The editor is [TipTap](https://tiptap.dev/) (ProseMirror), built into `web/journal_app/static/editor.js`. The page does not load anything from a CDN.
 
-A 4GB Pi 5, the 5-inch display, and the official supply are about $163 before the card and any case. The display is powered from the Pi (the GPIO power cable plus the flat cable in the box). Disconnect power before plugging those in, and follow the [Touch Display 2 installation steps](https://www.raspberrypi.com/documentation/accessories/touch-display-2.html): on a Pi 5 the flat cable is the supplied 22-way to 15-way cable, larger end into the display; on a Pi 4 or earlier it is the 15-way cable. With the USB sockets facing down, the red wire goes to the top-right GPIO pin (pin 2, 5V) and the black wire to pin 6 (ground).
+## Security
 
-A Pi 4 2GB is $67.50 if you already have a display and a USB-C supply. A Pi 3 still runs the 64-bit image and was left out of the memory price rises; 1GB of RAM makes the desktop slow, and the disk unlock below is tuned so that a Pi 3 can still open the volume.
+The security password is stored as an Argon2id hash. A second Argon2id derivation, with its own salt, wraps a random 32-byte key, and each entry is encrypted with AES-GCM under that key. The hash is not the wrapping key. After a successful sign-in the unwrapped key is kept in the journal process's memory. Signing out, or a restart of the service, drops it, and the next visit has to sign in again.
 
-### A 3.5" SPI panel you already own
+The Pi boots to the touchscreen without asking for that password, so setup and the address stay available in the room. Encrypting the entries in the application is what makes that possible. A copied database is not readable without the password. Someone who can change the files on the card can replace the program and capture the password the next time it is typed. That is the limit of this design.
 
-The GPIO touchscreens sold with `LCD-show` instructions (goodtft LCD35, Waveshare 3.5, and the ILI9486 clones) still work, using the kernel overlay in `scripts/spi-display.sh`. They occupy the GPIO header, so they are an alternative to the official display, not a second screen beside it. Expect a dim, slow panel. It is fine for text.
+The image also:
 
-### January 2021 list
+- Drops inbound traffic in `ufw` except TCP 443 (the journal) and UDP 5353 (mDNS).
+- Leaves OpenSSH installed, because the Trixie minbase includes it, and masks `ssh.service` and `ssh.socket`. The `journal` account has no password.
+- Installs daily security updates from Debian security and the Raspberry Pi archive. `rpi-eeprom` is excluded. When an upgrade needs a reboot, the Pi reboots at 04:00. Autosave has already stored the open entry.
 
-Kept so the old total is still readable. Those steps are not the setup procedure anymore.
+SSH stays off. Turning it on means mounting the card on another computer (the `journal` account is locked, and root has no password): unmask `ssh.service` and `ssh.socket`, give `journal` a login password, and allow port 22 in `ufw`. tty1 is the kiosk. A getty is still there on tty2 and above.
 
-* Raspberry Pi 3, $38.33
-* 16GB microSD card, $7.65
-* Touchscreen module and case, $26.25
-* Power supply, $7.65
-* Total, $79.88
+If the security password is lost, the entries cannot be decrypted. Deleting `/var/lib/secure-journal` on the card makes the next boot show setup again. That deletes the entries too.
 
-## What changed since that procedure
+## Develop the web app
 
-The January 2021 notes matched Raspberry Pi OS at the time: flash with balenaEtcher, drop an empty file named `ssh` on the boot partition, log in as `pi` / `raspberry`, set Wi-Fi in `raspi-config`, and run `LCD35-show`. The pieces that replaced that path:
-
-* There is no default `pi` / `raspberry` account. It was removed in April 2022. You create the user while writing the card. The name `pi` with the password `raspberry` is still accepted if you type it, and the first-boot wizard warns you; use a real password.
-* [Raspberry Pi Imager](https://www.raspberrypi.com/software/) writes the user, Wi-Fi, locale, and SSH key. Use Imager 2.x. Imager 1.x does not understand the customisation format on current Trixie images (`cloudinit-rpi`) and the settings are silently ignored. The format note is in the [Imager repository](https://github.com/raspberrypi/rpi-imager/blob/main/doc/os_customisation_formats.md). Current Trixie images apply that customisation with [cloud-init](https://www.raspberrypi.com/news/cloud-init-on-raspberry-pi-os/).
-* The boot partition on a running Bookworm or Trixie system is mounted at `/boot/firmware`. `config.txt` and `cmdline.txt` live there. An empty file named `ssh` on that FAT partition still enables the SSH server, which is the [manual method](https://www.raspberrypi.com/documentation/computers/remote-access.html) in the official docs. It does not create a user.
-* Wi-Fi is NetworkManager, from Bookworm onward. The desktop network menu and `nmcli` are the tools. `raspi-config` can still set a network.
-* The desktop is Wayland (labwc). `LCD-show` installs the older framebuffer driver and points the session at X11. On a current image that leaves the SPI panel dark and breaks the desktop. The in-tree `piscreen` overlay with `drm` is the replacement.
-* Official [install steps](https://www.raspberrypi.com/documentation/computers/getting-started.html) are Imager, then the first boot.
-
-## 1. Write the card
-
-On a computer with an SD reader:
-
-1. Install Raspberry Pi Imager **2.x** from the [software page](https://www.raspberrypi.com/software/). On Raspberry Pi OS the package is `rpi-imager`. On other Linux, use the AppImage from that page.
-2. Choose the Pi model, then **Raspberry Pi OS (64-bit)** with the desktop (the recommended entry). Choose the microSD card.
-3. In OS customisation, set:
-   * hostname, for example `journal` (you will use `journal.local`)
-   * a lowercase username and a long password (14 characters or more; this is also the `sudo` password)
-   * the Wi-Fi network, and the country when Imager asks for it (Wi-Fi stays down until a regulatory country is set)
-   * SSH enabled, **public-key authentication** (the key from this computer)
-   * timezone and keyboard
-   * Raspberry Pi Connect left off
-4. Write the card, put it in the Pi, connect the display, and power it.
-
-The first boot runs cloud-init before SSH answers. Give it a couple of minutes. Then, from the computer that holds the private key:
+From a checkout, with Python 3.12 or newer:
 
 ```bash
-ssh USER@journal.local
+python3 -m venv .venv
+.venv/bin/pip install -r web/requirements.txt
+.venv/bin/python -m journal_app.init --password 'Correct-Horse-Battery' --data ./data
+JOURNAL_DEV=1 JOURNAL_DATA_DIR=./data .venv/bin/python -m journal_app
 ```
 
-`USER` is the name you set. If mDNS does not resolve, use the address from the router.
+Open http://127.0.0.1:8000 . Dev mode speaks plain HTTP on localhost and skips the self-signed certificate.
 
-A wired Ethernet cable is a useful first boot when the Wi-Fi country or the SSID needs another try. Once you are in, NetworkManager is the configuration tool:
+The touchscreen UI is a second process, also localhost only:
 
 ```bash
-nmcli dev wifi list
-sudo nmcli dev wifi connect "SSID" --ask
+JOURNAL_DEV=1 JOURNAL_DISABLE_SYSTEMCTL=1 JOURNAL_DATA_DIR=./data-setup \
+  .venv/bin/python -m journal_app.setup_server
 ```
 
-SSH is optional. The next section is the touchscreen path: the same card, no second computer after this one is ejected.
-
-## Touchscreen setup
-
-Writing the card still needs another computer. The boot ROM only starts from a card that already has firmware, so it cannot download this setup by itself. After the card is written, the first boot can be done from the touchscreen.
-
-1. In Imager 2, write the desktop image. Set a username and a temporary password, or leave customisation empty so the official first-boot wizard creates the account on the screen. Wi-Fi and SSH can be left unset.
-2. While the boot partition is still mounted (the volume that contains `config.txt` and `user-data`):
+That listens on http://127.0.0.1:8080 and exits if asked to bind any other address. Use an empty data directory so it still offers setup.
 
 ```bash
-git clone https://github.com/weex/secure-journal.git
-cd secure-journal
-./scripts/prepare-card.sh /path/to/boot/partition
+.venv/bin/pytest
 ```
 
-`prepare-card.sh` copies this repository onto that FAT partition and adds one `runcmd` to `user-data`. It does not change the user, the password, or the Wi-Fi block Imager wrote. Cloud-init only reads the file when the first line is `#cloud-config`, which is what Imager 2 and the current Trixie images write. The format is described in [Cloud-init on Raspberry Pi OS](https://www.raspberrypi.com/news/cloud-init-on-raspberry-pi-os/). If the file is not in that form, the script stops and leaves it unchanged.
-
-3. Put the card in the Pi, connect the touchscreen, and power on. Log in. The wizard opens in the desktop session, which is where the on-screen keyboard can follow a text field.
-
-The wizard is GTK 3. That is the toolkit on the Raspberry Pi OS desktop, and squeekboard is wired to its text fields. A browser would be a second stack, and it is slow on a Pi 3. The window is one column inside a scrolled view, so a 3.5" panel can still reach the buttons when the keyboard is open.
-
-On the screen:
-
-* Set the Wi-Fi country (the radio stays off until a country is set) and join a network, or skip this when Ethernet is already connected. The Wi-Fi password is handed to NetworkManager with `nmcli connection up ... passwd-file`. `nmcli device wifi connect` only accepts the password as an argument, so the wizard does not use that form.
-* Choose a login password and a disk passphrase. Each needs 14 characters and three of lowercase, uppercase, digit, and symbol. A short common-password list is rejected. The two secrets have to be different. The meter runs on the Pi. The passphrase is not sent anywhere.
-* Pick a spare disk. The wizard runs `harden.sh`, then `luks-convert.sh`. Encrypting the card the Pi booted from is not implemented. That would rewrite the disk the system is running from, and a failed conversion would leave nothing that boots. The FAT boot partition stays unencrypted either way: the boot ROM cannot unlock LUKS.
-* Continuing without a spare disk is a separate button, and the journal then says the disk is not encrypted. There is no silent skip.
-
-The spare disk is the encrypted copy. Power off, move that card into the Pi, and power on. The original card is still the backup until the new one has unlocked and the journal is there.
-
-The passphrase prompt at that boot is not the desktop. Debian Trixie ships `unl0kr` 2.0.3+dfsg-2, a small touch keyboard that draws on the framebuffer from the initramfs. `scripts/unlock-keyscript` runs it and, if there is no display device or it fails, asks on the text console instead. The Pi firmware does not drive the Touch Display 2 (Raspberry Pi's display documentation and the firmware authors are explicit that the panel comes up with the kernel driver). The keyscript loads `panel-ilitek-ili9881c` and `goodix` when the kernel has them, which is the Touch Display 2 overlay (`vc4-kms-dsi-ili9881`, Goodix GT911), or `ili9486` and `ads7846` for a 3.5" SPI panel, then waits up to 20 seconds for `/dev/dri/card0` or `/dev/fb0`. Raspberry Pi documents the initramfs as an advanced mechanism and does not ship this integration. It has to be confirmed on the hardware.
-
-If the passphrase screen never appears, power off and add one token to the end of `cmdline.txt` on the FAT boot partition. That file is readable without the passphrase:
-
-```
-sj.unlock=console
-```
-
-Boot with HDMI and a USB keyboard. A 3.5" SPI panel often stays dark until the desktop even when the modules are in the initramfs. Use the HDMI fallback for the first encrypted boot on that panel.
-
-The official Touch Display 2 does not need an overlay. The SPI button in the wizard runs `scripts/spi-display.sh` and reboots. It is the same block as the manual step in the display section.
-
-## 2. Harden the system
-
-On the Pi:
+Rebuild the editor after changing `web/editor/src/editor.js`:
 
 ```bash
-sudo apt update
-sudo apt full-upgrade
-git clone https://github.com/weex/secure-journal.git
-cd secure-journal
-sudo ./scripts/harden.sh
+cd web/editor
+npm ci
+npm run build
 ```
 
-The script is safe to run again. It:
+## Build the image
 
-* installs daily security updates, including the Raspberry Pi archive (kernel and firmware), and leaves `rpi-eeprom` out of that automatic set
-* turns on `ufw`, default deny inbound, rate-limited SSH
-* turns off SSH root login and, when `~/.ssh/authorized_keys` already has a key, turns off SSH password login
-* makes `sudo` ask for the login password
-* boots to the desktop and asks for that password (console autologin is off as well, so a text console is not a way around the screen lock)
-* enables the on-screen keyboard when a touchscreen is present, and blanks the screen after 10 idle minutes
-* requires 14 mixed characters the next time the login password is changed
-* creates `~/journal` mode `0700` and installs a `journal` command
+The image is an [rpi-image-gen](https://github.com/raspberrypi/rpi-image-gen) v2.9.0 definition, `image/config/journal.yaml`. It includes the Trixie minbase (no desktop), targets a Pi 5, and adds NetworkManager with iwd as the Wi-Fi backend. cage and Chromium run a kiosk on tty1 pointed at the setup page. The Touch Display 2 is picked up by `display_auto_detect=1` and the VC4 KMS driver already in that Pi 5 base.
 
-Open a second SSH session with the key before closing the first one, so a mistake in the client config does not lock you out. The script does not enable passwordless SSH by itself: the key has to be the one Imager installed, or one you added to `~/.ssh/authorized_keys`.
-
-`rpi-update` is not part of this. It installs pre-release firmware. Updates come from `apt`.
-
-Check the result:
+Upstream supports a Debian Bookworm or Trixie arm64 machine. On one:
 
 ```bash
-sudo ufw status
-sudo sshd -T | grep -E '^(passwordauthentication|permitrootlogin|pubkeyauthentication) '
-sudo unattended-upgrade --dry-run --debug
+git clone --depth 1 --branch v2.9.0 https://github.com/raspberrypi/rpi-image-gen.git
+sudo ./rpi-image-gen/install_deps.sh
+sudo ./image/build.sh "$PWD/rpi-image-gen"
 ```
 
-`passwordauthentication` should be `no`, and `permitrootlogin` should be `no`. If `unattended-upgrade` reports allowed origins that do not include `Debian-Security` and `Raspberry Pi Foundation`, compare them with `apt-cache policy` and edit `/etc/apt/apt.conf.d/52secure-journal-unattended`. The strings written by the script match the Trixie and Bookworm archives as documented in 2026; a renamed origin would match nothing and would fail silently.
+The flashable file is `dist/secure-journal.img.xz`.
 
-The Pi does not reboot for those updates. A kernel update sits in `/var/run/reboot-required` until you reboot, and an encrypted root will ask for the disk passphrase at that reboot. Update the bootloader EEPROM when you are ready to do that on purpose:
+The GitHub Actions workflow `Image` runs that script in a privileged Debian Trixie container on `ubuntu-24.04-arm`. Start it from the Actions tab, or push a `v*` tag to attach the image to a release as well. The `Tests` workflow runs pytest, rebuilds the editor bundle, and shellchecks the image scripts. It does not boot a Pi.
 
-```bash
-sudo apt install --only-upgrade rpi-eeprom
-```
+## Not covered by the automated tests
 
-## 3. Display
-
-**Touch Display 2.** No driver install. The panel is detected. The on-screen keyboard appears when a text field needs it. If the picture is sideways, the Screen Configuration tool (or `wlr-randr`) rotates it.
-
-**3.5" SPI panel.** From the cloned repository:
-
-```bash
-sudo ./scripts/spi-display.sh
-sudo reboot
-```
-
-That writes one block to `/boot/firmware/config.txt`:
-
-```
-dtoverlay=piscreen,drm,rotate=90,speed=18000000
-```
-
-`drm` is what makes the panel a KMS display under Wayland. The parameter list is the `piscreen` section of `/boot/firmware/overlays/README` on the Pi. Clones disagree about rotation and which touch axis is which. If the colours break, lower `speed`. If taps land in the wrong place, re-run with something like:
-
-```bash
-sudo SPI_DTPARAM='piscreen,drm,rotate=270,speed=16000000,invx,swapxy' ./scripts/spi-display.sh
-sudo reboot
-```
-
-Running `LCD-show` on this image is the step that breaks the desktop. The script does not clone that repository.
-
-The passphrase prompt at boot is the initramfs keyboard described in the touchscreen section, not this desktop. An SPI panel often stays dark until the desktop starts. Have an HDMI cable and a USB keyboard for that first encrypted boot, or add `sj.unlock=console` to `cmdline.txt`.
-
-## 4. Encrypt the root filesystem
-
-You need a second disk at least as large as the used space plus about 1GB: another microSD card in a USB reader, or a USB SSD. The script copies the running system onto that disk, with the root inside LUKS2, and does not write to the disk you booted from. If the copy fails, the original card still boots.
-
-```bash
-lsblk
-sudo ./scripts/luks-prepare.sh
-sudo ./scripts/luks-convert.sh /dev/sda
-```
-
-`lsblk` is how you tell the spare disk from the one you booted from. The script refuses if you name the live disk, a partition, or a disk that is mounted. It asks you to type `ERASE /dev/sda` (with the real name) and then a passphrase of at least 14 characters, twice. The passphrase is not a command-line argument.
-
-What the script pins, and why:
-
-* LUKS2, `aes-xts-plain64`, 512-bit key, Argon2id.
-* Argon2 memory is fixed at 64MB and the iteration time at 2 seconds. cryptsetup's default memory cost follows the RAM of the machine doing the format. A cost picked on a Pi 5 can then fail in the initramfs, and a Pi 3 has 1GB total. Two seconds per guess is the cost an offline attacker pays; unlock on a Pi 3 stays possible.
-* `/etc/crypttab` points at the partition's `PARTUUID`, so the same card works in the SD slot or a USB reader.
-* The initramfs is built with `MODULES=most` and `CRYPTSETUP=y`. The stock `MODULES=dep` image only copies modules the running system is using, and `dm-crypt` is not one of them until the disk is already encrypted.
-* The boot partition is FAT, 512MB, with the boot flag set. `cmdline.txt` sets `root=/dev/mapper/cryptroot`. `auto_initramfs=1` (the Trixie default) makes the bootloader load the initramfs. Raspberry Pi documents initramfs as an advanced mechanism and does not ship an encryption tutorial; this uses Debian's `cryptsetup-initramfs`, which Raspberry Pi OS includes.
-
-Power off. Move the new card into the Pi's slot (or leave a USB disk attached and set the boot order if you intend to boot from it). Power on. Enter the disk passphrase on the touchscreen keyboard, or with a USB keyboard if you set `sj.unlock=console` or the panel stayed dark. Then enter the login password at the desktop.
-
-Confirm the journal file is there. The original card is still unencrypted. It is the backup until that check passes. Then wipe it (`wipefs -a` on each partition, or Imager's erase) before it lives in a drawer next to the Pi.
-
-Re-running `luks-convert.sh` on the same spare disk erases it and writes a fresh copy. It does not "continue" a half-finished card.
-
-To change the passphrase later, on the running system:
-
-```bash
-lsblk -o NAME,TYPE,PARTUUID
-sudo cryptsetup luksChangeKey /dev/disk/by-partuuid/PARTUUID-OF-THE-LUKS-PARTITION
-```
-
-`cryptsetup luksAddKey` adds a second keyslot if you want a recovery passphrase stored somewhere other than the Pi. Do not put a key file on the FAT boot partition.
-
-## Daily use
-
-On the desktop, **Journal** opens today's file. From a terminal, `journal` does the same. Entries are Markdown files under `~/journal/YYYY/MM/YYYY-MM-DD.md`, mode `0600`, in a directory mode `0700`.
-
-* Step away: lock the screen from the desktop menu (Shutdown, then Lock Screen). Blanking after 10 minutes hides the picture and does not ask for the password.
-* Finished for the day: shut down. That is what locks the disk.
-* The on-screen keyboard at the disk prompt is `unl0kr`, inside the initramfs. The desktop keyboard is squeekboard, including the greeter. They are different programs. If the disk prompt does not appear on the panel, use `sj.unlock=console` and a USB keyboard.
-
-## Scripts
-
-| Script | Runs | What it does |
-| --- | --- | --- |
-| `scripts/prepare-card.sh` | On the computer that wrote the card | Copies this repository to the FAT boot partition and adds a cloud-init runcmd |
-| `scripts/bootstrap.sh` | Root, on the Pi, safe to repeat | Installs the wizard's packages and the desktop autostart |
-| `scripts/launch-session` | Graphical login | Opens the wizard until setup is finished, then the journal |
-| `scripts/harden.sh` | Repeat safely | Updates, firewall, SSH, sudo password, autologin, keyboard, journal directory |
-| `scripts/spi-display.sh` | Repeat safely | One `config.txt` block for a 3.5" SPI panel |
-| `scripts/luks-prepare.sh` | Repeat safely | Installs cryptsetup and the unlock UI, and rebuilds the initramfs. Does not encrypt |
-| `scripts/luks-unlock-ui.sh` | Repeat safely | Installs the initramfs keyscript and, with `--with-packages`, `unl0kr` |
-| `scripts/luks-convert.sh` | Erases the disk you name | Writes a LUKS root onto a spare disk |
-| `scripts/wifi-join.sh` | | Country, scan, and a NetworkManager connection. The Wi-Fi password is a file |
-| `scripts/setup-apply.sh` | Root, from the wizard | Checks the passphrases, runs harden, then the LUKS copy |
-| `scripts/journal` | | Opens today's entry in the touchscreen app, or Mousepad, or nano |
-
-`tests/spi-display.sh` checks that the config block can be rewritten without losing the rest of `config.txt`. `tests/luks-metadata.sh` checks the cmdline and fstab rewrite and that the LUKS header is the pinned cipher and Argon2 cost. `tests/luks-convert-loop.sh` runs the copy onto loop devices when the kernel has device-mapper. `tests/python.sh` checks the passphrase meter, the Wi-Fi and disk parsers, and the journal files. `tests/user-data-merge.sh`, `tests/wifi-join.sh`, `tests/unlock-keyscript.sh`, and `tests/setup-apply.sh` cover the wizard's shell without a radio, a display, or a Pi. None of these is a substitute for booting a Pi.
-
-## Needs a real Pi
-
-The steps were checked against Raspberry Pi's documentation for installing an image, SSH, `config.txt`, the Touch Display 2, the 2022 removal of the default user, cloud-init on Trixie, Imager's customisation formats, and Debian Trixie's `unl0kr` package. `shellcheck` is clean on the scripts. In this environment the kernel has no device-mapper, so the tests covered the `config.txt` block, the convert script's refusals, the cmdline and fstab rewrite, a real LUKS2 header with the pinned cipher and Argon2 cost, the cloud-init runcmd merge, the passphrase rules, the Wi-Fi and disk parsers, the unlock keyscript's console fallback, and `setup-apply.sh` refusing a weak or mismatched passphrase before it changes anything. They did not boot a Pi, join a network, or open the GTK windows. These still need hardware:
-
-* Imager 2 customisation on a current Trixie image: user, Wi-Fi country, and SSH key, then SSH to `hostname.local`.
-* Touchscreen path: `prepare-card.sh` on the boot partition, first boot, log in with the on-screen keyboard, wizard opens without an SSH session.
-* Wizard Wi-Fi: country code, scan, join, and Ethernet skip. Confirm the password is not required on a second boot.
-* Wizard passphrases: the meter rejects a short password and accepts a long mixed one; the disk passphrase and the login password have to differ.
-* `harden.sh` from the wizard or by hand: `ufw`, `sshd -T`, a second key-based login if SSH is in use, sudo prompting, the desktop asking for a password, the on-screen keyboard, and `unattended-upgrade --dry-run`.
-* Touch Display 2: picture and touch in the wizard, squeekboard in a text field and on the greeter, then the disk passphrase on `unl0kr` after the encrypted card is booted. Time how long the panel stays dark.
-* A 3.5" SPI panel: the wizard's SPI button or `scripts/spi-display.sh`, then rotation and touch axes. Expect the disk prompt to need HDMI. Confirm whether `unl0kr` appears on that panel at all.
-* `sj.unlock=console` on `cmdline.txt`: the on-screen UI is skipped and a USB keyboard on HDMI can unlock.
-* `luks-convert.sh` onto a spare card, from the wizard or the shell: passphrase, desktop login, journal file present, reboot asks again. Time the unlock on a Pi 3 if that is the board. Confirm a wrong passphrase is rejected and the right one still works.
-* Continue without encryption: the journal shows that the disk is not encrypted, and "Set up encryption" opens the wizard again.
-* A kernel update from unattended-upgrades, then a manual reboot, to confirm the new initramfs still runs `unl0kr` and unlocks.
-
-## Layout
-
-```
-scripts/prepare-card.sh    stage the wizard onto a freshly written card
-scripts/bootstrap.sh       install packages and the desktop autostart
-scripts/launch-session     wizard, then the journal
-ui/                        GTK wizard, journal app, and the testable rules
-scripts/harden.sh          firewall, updates, SSH, passwords
-scripts/spi-display.sh     optional 3.5" SPI panel
-scripts/luks-prepare.sh    initramfs support, no encryption yet
-scripts/luks-unlock-ui.sh  unl0kr keyscript and display modules
-scripts/luks-convert.sh    LUKS root on a spare disk
-scripts/journal            open today's entry
-tests/                     parsers, cloud-init merge, LUKS header, loopback
-```
+The tests check password rules, Argon2id, AES-GCM, entry storage, sessions, login rate limiting, the setup API (with stand-in `nmcli` and `ip` commands), and the image install hook against an empty directory. They do not flash a card, join a real network, light a Touch Display 2, or walk through the browser certificate warning. Those still need a Pi 5 and the display.

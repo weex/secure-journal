@@ -1,0 +1,16 @@
+// Security updates from Debian and the Raspberry Pi archive.
+// rpi-eeprom is left out: a bad bootloader update is painful to recover.
+// The Pi reboots at 04:00 when an upgrade needs it. There is no disk passphrase.
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::SyslogEnable "true";
+Unattended-Upgrade::Package-Blacklist {
+    "rpi-eeprom";
+};
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+    "origin=Debian,codename=${distro_codename},label=Debian-Security";
+    "origin=Raspberry Pi Foundation,codename=${distro_codename},label=Raspberry Pi Foundation";
+};
